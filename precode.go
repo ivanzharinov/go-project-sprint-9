@@ -15,6 +15,7 @@ import (
 func Generator(ctx context.Context, ch chan<- int64, fn func(int64)) {
 	// 1. Функция Generator
 	i := int64(1)
+	defer close(ch)
 	for {
 		select {
 		case ch <- i:
@@ -29,12 +30,8 @@ func Generator(ctx context.Context, ch chan<- int64, fn func(int64)) {
 // Worker читает число из канала in и пишет его в канал out.
 func Worker(in <-chan int64, out chan<- int64) {
 	// 2. Функция Worker
-	for {
-		v, ok := <-in
-		if !ok {
-			close(out)
-			return
-		}
+	defer close(out)
+	for v := range in {
 		out <- v
 		time.Sleep(1 * time.Millisecond)
 	}
@@ -44,7 +41,7 @@ func main() {
 	chIn := make(chan int64)
 
 	// 3. Создание контекста
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	// для проверки будем считать количество и сумму отправленных чисел
 	var inputSum int64   // сумма сгенерированных чисел
@@ -67,10 +64,6 @@ func main() {
 		go Worker(chIn, outs[i])
 	}
 
-	go func() {
-		<-ctx.Done()
-		close(chIn)
-	}()
 	// amounts — слайс, в который собирается статистика по горутинам
 	amounts := make([]int64, NumOut)
 	// chOut — канал, в который будут отправляться числа из горутин `outs[i]`
